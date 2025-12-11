@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AI framework for UEBA</title>
+<style>
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #000;
+    overflow: hidden;
+}
+.partition {
+    background: white;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+    position: absolute;
+    top: 0;
+    left: 0;
+    transition: all 0.3s ease;
+}
+#reports {
+    width: 100%;
+    height: 100%;
+}
+#popupPanel {
+    position: fixed;
+    top: 0;
+    left: -320px;
+    width: 300px;
+    height: 100%;
+    background: white;
+    padding: 20px;
+    box-shadow: 3px 0 10px rgba(0,0,0,0.2);
+    transition: left 0.3s ease;
+    z-index: 1000;
+    overflow-y: auto;
+}
+#popupPanel.open { left: 0; }
+.closeBtn {
+    background: red;
+    color: white;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 5px;
+    float: right;
+    cursor: pointer;
+}
+.menu-btn {
+    position: fixed;
+    top: 15px;
+    left: 15px;
+    padding: 10px 16px;
+    background-color: yellow;
+    color: white;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    z-index: 999;
+    font-weight: bold;
+}
+#chatToggleBtn {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: black;
+    color: white;
+    font-size: 28px;
+    border: none;
+    cursor: pointer;
+    z-index: 1001;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+}
+#floatingChat {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 33vw;
+    height: 100%;
+    max-width: 600px;
+    min-width: 350px;
+    background: white;
+    border-radius: 0;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 1000;
+    transform: scale(0);
+    transform-origin: top right;
+    transition: transform 0.5s ease, right 0.5s ease;
+}
+#floatingChat.open {
+    transform: scale(1);
+}
+#floatingChat h2 {
+    margin: 10px;
+    font-size: 18px;
+    cursor: move;
+    user-select: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+#floatingChat h2 button {
+    background: red;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 20px;
+    text-align: center;
+}
+
+.mode-tabs { display: flex; gap: 10px; margin: 10px; }
+.mode-btn { padding: 6px 12px; border: none; border-radius: 6px; background: #d9d9d9; cursor: pointer; font-weight: bold; font-size: 14px; }
+.mode-btn.active { background: #007BFF; color: white; }
+
+.chat-window { flex: 1; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 10px; background: #fafafa; display: none; margin: 10px; }
+.chat-window.active { display: block; }
+
+.msg { max-width: 75%; padding: 8px 12px; margin-bottom: 8px; border-radius: 16px; word-wrap: break-word; }
+.user { background-color: #007BFF; color: white; margin-left: auto; border-bottom-right-radius: 0; }
+.bot { background-color: #e6e6e6; color: black; margin-right: auto; border-bottom-left-radius: 0; }
+
+.chat-input-area { display: flex; gap: 5px; margin: 10px; }
+.chat-input-area input { flex: 1; padding: 8px; border-radius: 8px; border: 1px solid #ccc; }
+.chat-input-area button { padding: 8px 12px; background: #28a745; border: none; color: white; border-radius: 8px; cursor: pointer; }
+
+</style>
+</head>
+<body>
+<button class="menu-btn" onclick="toggleInputPanel()">input/conf files</button>
+<div id="popupPanel">
+    <button class="closeBtn" onclick="toggleInputPanel()">X</button>
+    <h2>Upload input/configuration files</h2>
+    <label>Upload Text File:</label>
+    <input type="file" accept=".yaml"><br><br>
+    <label>Upload CSV File:</label>
+    <input type="file" accept=".csv"><br><br>
+    <label>Upload Image:</label>
+    <input type="file" accept="image/*"><br><br>
+    <label>Upload JSON:</label>
+    <input type="file" accept=".json"><br><br>
+    <label>Upload PDF:</label>
+    <input type="file" accept="application/pdf"><br>
+</div>
+<div class="partition" id="reports">
+    <h2>Reports</h2>
+    <p>No reports generated yet.</p>
+</div>
+<div id="floatingChat">
+    <h2>
+        Chat
+        <button onclick="collapseChat()">×</button>
+    </h2>
+    <div class="mode-tabs">
+        <button class="mode-btn active" onclick="switchMode('A', this)">pipeline data</button>
+        <button class="mode-btn" onclick="switchMode('B', this)">interactive</button>
+    </div>
+    <div class="chat-window active" id="chatA"></div>
+    <div class="chat-window" id="chatB"></div>
+    <div class="chat-input-area">
+        <input type="text" id="userInput" placeholder="Type your message..." onkeypress="handleEnter(event)">
+        <button onclick="sendMessage()">Send</button>
+    </div>
+</div>
+<button id="chatToggleBtn" onclick="expandChat()">💬</button>
+<script>
+let inputOpen = false, chatOpen = false, currentMode = "A";
+const chatPanel = document.getElementById("floatingChat");
+const chatButton = document.getElementById("chatToggleBtn");
+const reports = document.getElementById("reports");
+let isDragging = false, offsetX, offsetY;
+document.querySelector("#floatingChat h2").addEventListener('mousedown', e => {
+    isDragging = true;
+    offsetX = e.clientX - chatPanel.offsetLeft;
+    offsetY = e.clientY - chatPanel.offsetTop;
+    document.body.style.userSelect = "none";
+});
+document.addEventListener('mousemove', e => {
+    if(!isDragging) return;
+    let x = e.clientX - offsetX;
+    let y = e.clientY - offsetY;
+    x = Math.max(0, Math.min(window.innerWidth - chatPanel.offsetWidth, x));
+    y = Math.max(0, Math.min(window.innerHeight - chatPanel.offsetHeight, y));
+    chatPanel.style.left = x + 'px';
+    chatPanel.style.top = y + 'px';
+    adjustReports();
+});
+document.addEventListener('mouseup', () => { isDragging = false; document.body.style.userSelect = "auto"; });
+function toggleInputPanel() { 
+    inputOpen = !inputOpen; 
+    document.getElementById("popupPanel").classList.toggle("open", inputOpen); 
+    adjustReports(); 
+}
+function collapseChat() {
+    chatOpen = false;
+    chatPanel.style.transformOrigin = "top right";
+    chatPanel.style.right = "20px";
+    chatPanel.style.top = "0";
+    chatPanel.style.transform = "scale(0)";
+    setTimeout(()=> chatPanel.style.display = "none", 500);
+    chatButton.style.display = "block";
+    adjustReports();
+}
+function expandChat() {
+    chatOpen = true;
+    chatPanel.style.display = "flex";
+    chatPanel.style.transformOrigin = "top right";
+    setTimeout(()=> chatPanel.style.transform = "scale(1)", 50);
+    chatButton.style.display = "none";
+    adjustReports();
+}
+function adjustReports() {
+    let left = inputOpen ? 320 : 0;
+    let top = 0;
+    let width = window.innerWidth - left;
+    let height = window.innerHeight;
+
+    if(chatOpen) {
+        const rect = chatPanel.getBoundingClientRect();
+        if(rect.left < left + width) width = rect.left - left - 10;
+    }
+
+    reports.style.left = left + 'px';
+    reports.style.top = top + 'px';
+    reports.style.width = width + 'px';
+    reports.style.height = height + 'px';
+}
+window.addEventListener('resize', adjustReports);
+function switchMode(mode, btn) {
+    currentMode = mode;
+    document.querySelectorAll(".mode-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    document.querySelectorAll(".chat-window").forEach(win => win.classList.remove("active"));
+    document.getElementById("chat" + mode).classList.add("active");
+}
+function sendMessage() {
+    const input = document.getElementById("userInput");
+    const text = input.value.trim();
+    if (!text) return;
+    addMessage(text, "user");
+    setTimeout(() => addMessage(`(${currentMode}) Bot reply: how may I help you?`, "bot"), 600);
+    input.value = "";
+}
+function addMessage(msg, type) {
+    const chatWin = document.getElementById("chat" + currentMode);
+    const div = document.createElement("div");
+    div.className = "msg " + type;
+    div.textContent = msg;
+    chatWin.appendChild(div);
+    chatWin.scrollTop = chatWin.scrollHeight;
+}
+function handleEnter(e) { if(e.key === "Enter") { sendMessage(); e.preventDefault(); } }
+</script>
+</body>
+</html>
