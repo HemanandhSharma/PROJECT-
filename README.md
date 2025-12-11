@@ -170,9 +170,3 @@ Save chat history to localStorage
 
 Theme switcher (dark/light)
 
-📜 License
-
-You may add any open-source license (MIT recommended).
-If you'd like me to generate one, just ask.
-
-If you'd like a version with separated CSS/JS files, a diagram, or a project folder structure, I can produce it.
